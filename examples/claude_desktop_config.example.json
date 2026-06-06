@@ -1,0 +1,25 @@
+{
+  "_comment": "Example MCP client config for the v1-v6 governance server. Copy the block(s) you need into your Claude Desktop claude_desktop_config.json (mcpServers). TWO modes are shown: (1) a LOCAL stdio launch that runs the OPEN BASELINE on this machine, and (2) a REMOTE/HOSTED URL that connects to the operator's infra where the closed _premium moat overlay is installed server-side. Use ONE of them, not both, unless you intentionally want both registered.",
+
+  "mcpServers": {
+    "quantchoai-governance-local": {
+      "_comment": "LOCAL stdio. Runs the server as a child process on this machine. Open baseline unless quant.governance._premium is installed here. 'cwd' MUST be the repo's backend/ dir so 'quant.governance' is importable. Requires: pip install mcp.",
+      "command": "python",
+      "args": ["-m", "quant.governance.mcp.server"],
+      "cwd": "/path/to/quantchoai-governor/backend",
+      "env": {
+        "QCHO_MCP_TRANSPORT": "stdio",
+        "QCHO_MCP_DISK_FREE_GB": "50"
+      }
+    },
+
+    "quantchoai-governance-hosted": {
+      "_comment": "REMOTE/HOSTED. Connects to the operator-hosted endpoint (run with QCHO_MCP_TRANSPORT=streamable-http behind the operator's auth/proxy). The hosted infra ships the closed _premium overlay, so this gives the FULL moat decision while the moat code never reaches the client. Replace the URL + token with your deployment's values.",
+      "url": "https://governance.your-operator-domain.example/mcp",
+      "transport": "streamable-http",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_TOKEN"
+      }
+    }
+  }
+}

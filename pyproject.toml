@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantchoai-governor"
+version = "0.1.0"
+description = "Deterministic, auditable v1-v6 governance for agent fleets -- open baseline (MIT)."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = []
+authors = [{ name = "QuantChoAI", email = "oss@quantchoai.com" }]
+keywords = ["agent", "governance", "fleet", "llm", "orchestration", "mcp", "risk"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/quantchoai/quantchoai-governor"
+
+[project.scripts]
+quantchoai-governor-mcp = "solo_fleet_api:_mcp_server_main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+py-modules = ["solo_fleet_api"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["quant*"]

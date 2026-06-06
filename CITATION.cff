@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software or its ideas, please cite it as below."
+title: "quantchoai-governor: a deterministic control plane for governing agent fleets"
+abstract: "Open baseline of the V1-V6 deterministic, auditable agent-governance framework: Bayesian skill credit, coherent tail-risk (CVaR), survival/hazard analysis, and a risk-budgeted auction, exposed over MCP."
+type: software
+authors:
+  - name: "QuantChoAI"
+license: MIT
+version: "0.1.0"
+repository-code: "https://github.com/quantchoai/quantchoai-governor"
+url: "https://github.com/quantchoai/quantchoai-governor"
+keywords:
+  - "agent governance"
+  - "multi-agent systems"
+  - "llm orchestration"
+  - "model context protocol"
+  - "risk management"
