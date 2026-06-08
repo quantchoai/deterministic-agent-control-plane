@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software or its ideas, please cite it as below."
 title: "quantchoai-governor: a deterministic control plane for governing agent fleets"
-abstract: "Open baseline of the V1-V6 deterministic, auditable agent-governance framework: Bayesian skill credit, coherent tail-risk (CVaR), survival/hazard analysis, and a risk-budgeted auction, exposed over MCP."
+abstract: "Open baseline of the V1-V5 deterministic, auditable agent-governance frame: Bayesian skill credit, coherent tail-risk (CVaR), survival/hazard analysis, and a risk-budgeted auction, exposed over MCP."
 type: software
 authors:
   - name: "QuantChoAI"

@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.quantchoai/quantchoai-governor",
   "title": "QuantChoAI Governor",
-  "description": "Deterministic, auditable v1-v6 governance for agent fleets (open baseline).",
+  "description": "Deterministic, auditable v1-v5 governance for agent fleets (open baseline).",
   "repository": { "url": "https://github.com/quantchoai/quantchoai-governor", "source": "github" },
   "version": "0.1.0",
   "packages": [

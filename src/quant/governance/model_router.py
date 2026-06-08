@@ -1,11 +1,10 @@
-"""model_router.py -- DATA-DRIVEN v1-v6 governed MODEL-TIER routing for the dev fleet.
+"""model_router.py -- DATA-DRIVEN v1-v5 governed MODEL-TIER routing for the dev fleet.
 
-The founder's point (2026-06-05, correct): the earlier prototype
-(`_cto2_v1v6_private/model_router.py`) HARDCODED tier capability (mu/sigma per
-tier) and difficulty floors (haiku<=50, sonnet<=80). Those magic numbers are not
-truths -- they should be (a) GROUNDED PRIORS for cold-start, and (b) LEARNED from
-real dispatch outcomes via the SAME v1-v6 V2 Bayesian credit machinery the agent
-ledger already uses. This module is exactly that:
+An earlier prototype HARDCODED tier capability (mu/sigma per tier) and difficulty
+floors (haiku<=50, sonnet<=80). Those magic numbers are not truths -- they should be
+(a) GROUNDED PRIORS for cold-start, and (b) LEARNED from real dispatch outcomes via the
+SAME v1-v5 V2 Bayesian credit machinery the agent ledger already uses. This module is
+exactly that:
 
     * The three model tiers (opus/sonnet/haiku) are the *agents*.
     * Each tier carries a per-(tier, difficulty-band) MEASURED credit row
@@ -16,7 +15,7 @@ ledger already uses. This module is exactly that:
       `p_success(mu, sigma, difficulty)` (the dispatcher's sigmoid) -- a tier whose
       MEASURED mu is far below the task difficulty gets a low p_success and loses
       the auction naturally. No hardcoded difficulty floor.
-    * `record_outcome` applies the EXACT v1-v6 Bayesian mu/sigma update law that
+    * `record_outcome` applies the EXACT v1-v5 Bayesian mu/sigma update law that
       `ledger.update_domain_skill` uses (Elo/Bayesian: mu += k*q*(outcome-expected),
       sigma shrinks on success / grows on failure). We do NOT invent a new update
       law -- we mirror the ledger's onto the tier_credit rows.
@@ -139,7 +138,7 @@ async def _current_credit(db, tier: str, band: str) -> dict:
 
 
 async def record_outcome(db, *, tier: str, difficulty: float, success: bool, quality: float = 1.0) -> dict:
-    """Apply the v1-v6 V2 Bayesian credit update to the (tier, difficulty_band) row.
+    """Apply the v1-v5 V2 Bayesian credit update to the (tier, difficulty_band) row.
 
     This is the SAME update law `ledger.update_domain_skill` uses on agent_ledger --
     mirrored here onto `tier_credit` rather than re-invented:
@@ -228,7 +227,7 @@ def _p_success(mu: float, sigma: float, difficulty: float) -> float:
 
 
 async def route(db, item: dict[str, Any], disk_free: float | None = 50.0) -> dict[str, Any]:
-    """Pick the model tier for ONE work item via the DATA-DRIVEN v1-v6 auction.
+    """Pick the model tier for ONE work item via the DATA-DRIVEN v1-v5 auction.
 
     `item` is a work descriptor: {slug, kind, difficulty(0-100), value(0-1),
     money_risk(0-3), security_risk(0-3), target_domain}. Returns
@@ -331,7 +330,7 @@ async def route_batch(db, items: list[dict[str, Any]], disk_free: float | None =
 # --------------------------------------------------------------------------- #
 # Thin Mongo access shim
 # --------------------------------------------------------------------------- #
-# The v1-v6 control plane runs against pymongo (sync) in production, but the agent
+# The v1-v5 control plane runs against pymongo (sync) in production, but the agent
 # fleet increasingly calls the router from async contexts. These helpers await a
 # Motor-style coroutine when present and otherwise call the sync pymongo method, so
 # the same router works against BOTH a real async Motor db AND a sync/in-memory

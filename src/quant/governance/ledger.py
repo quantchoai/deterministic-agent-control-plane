@@ -3,7 +3,7 @@
 The persisted Mongo field remains `weight` for compatibility with board.py and
 existing queries, but it now means absolute HP, not a normalized fraction.
 
-Reliability (v1-v6 patch):
+Reliability (v1-v5 patch):
   - BUFFERED LOG WRITES: system_logs / agent_events inserts are batched through an
     in-process deque, flushed every ~5 s or at size >= 50, via a background daemon
     thread that calls insert_many. flush() and atexit-on-exit are provided.
@@ -122,8 +122,8 @@ HAZARD_GUILLOTINE_THRESHOLD = float(os.environ.get("QUANTCHO_HAZARD_GUILLOTINE",
 # ---------------------------------------------------------------------------
 # Until now the BASE term of `calculate_hazard` was a single flat BASE_HAZARD=0.05
 # for EVERY agent -- a blind prior that cannot tell a 4x-worse agent from a clean
-# one. The V6 estimation layer (modelver_poisson_failure / the materializer's
-# `lambda_fail`) already produces a calibrated, per-agent/domain empirical-Bayes
+# one. A calibrated estimation layer (the slow-loop materializer's `lambda_fail`,
+# part of the private/commercial layer) produces a per-agent/domain empirical-Bayes
 # failure RATE lambda_a. The correct base hazard is the probability that the agent
 # logs AT LEAST ONE failure in the next window:
 #
@@ -491,63 +491,47 @@ def _accel_hazard_term(snapshot: dict) -> tuple[float, dict]:
     """Non-linear (second-order) hazard contribution from mu-collapse ACCELERATION.
 
     The linear terms answer "how bad is the agent NOW?". This answers "how fast is the
-    agent getting worse?". We feed the agent's mu-history (newest-LAST) into the robust
-    local-quadratic second difference `d2_mu_accel` (imported from the V5/V6 lambda
-    controller). It returns d2_mu = curvature of mu(t):
+    agent getting worse?". We read the agent's mu-history (newest-LAST) and compute the
+    plain second difference of mu over the last three points:
+
+        d2_mu = mu[-1] - 2*mu[-2] + mu[-3]
 
         d2_mu < 0  ->  downward curvature  ->  the decline is ACCELERATING (pre-guillotine
                        inflection: "falling AND speeding up")
         d2_mu ~ 0  ->  flat / linear drift (a plateau or a steady glide -- NOT an emergency)
         d2_mu > 0  ->  recovery accelerating (good; never raises hazard)
 
-    Only a *significant* downward curvature contributes. `significant` is `d2_mu_accel`'s
-    built-in ~95% test (|d2_mu| beyond its confidence half-width). That gate is the whole
-    SNR-vs-LATENCY lever:
-
-      * Lower significance bar / larger WEIGHT_ACCEL  -> earlier warning (lower LATENCY) but
-        more false alarms on a noisy-but-healthy mu trace (lower SNR).
-      * Higher bar / smaller weight                   -> fewer false alarms (higher SNR) but
-        you see the inflection later, closer to the guillotine (higher LATENCY).
-
-    We deliberately keep the SNR side conservative: a noisy flat learner reads `significant=
-    False` -> zero acceleration hazard, so noise does not false-alarm. The magnitude is the
-    excess curvature beyond the noise half-width (|d2_mu| - half_width), so a barely-
-    significant wiggle adds almost nothing while a genuine collapse adds real hazard. The
-    term is hard-capped at HAZARD_ACCEL_CAP so it is an early-warning NUDGE, never an
-    independent kill switch.
+    This is the hot-path-cheap deterministic read (the same second-difference shape as
+    risk_core.gamma_acceleration_second_difference). Only a downward curvature beyond a
+    small noise threshold contributes; a barely-significant wiggle adds almost nothing
+    while a genuine collapse adds real hazard. The term is hard-capped at HAZARD_ACCEL_CAP
+    so it is an early-warning NUDGE, never an independent kill switch. (A robust,
+    significance-gated local-quadratic refinement is part of the private/commercial layer.)
     """
     mu_history = snapshot.get("mu_history")
     components = {"accel": 0.0, "d2_mu": 0.0, "significant": False, "direction": "flat"}
     if not mu_history or len(mu_history) < 3:
         return 0.0, components
     try:
-        # Lazy import: keeps ledger import-light and avoids a hard numpy dependency on the
-        # hot path (d2_mu_accel has a pure-Python fallback, but the module also imports numpy
-        # opportunistically). Any failure degrades gracefully to the linear hazard.
-        from quant.governance.modelver_lambda_controller import d2_mu_accel, _t95
-        accel = d2_mu_accel(mu_history)
-    except Exception:
+        h = [float(v) for v in mu_history if v is not None]
+    except (TypeError, ValueError):
         return 0.0, components
-    d2_mu = float(accel.get("d2_mu") or 0.0)
-    significant = bool(accel.get("significant"))
-    direction = str(accel.get("direction") or "flat")
+    if len(h) < 3:
+        return 0.0, components
+    d2_mu = h[-1] - 2.0 * h[-2] + h[-3]
+    # A small deterministic noise floor (in mu points) below which curvature is ignored,
+    # so a noisy-but-flat trace does not false-alarm.
+    noise_floor = float(os.environ.get("QUANTCHO_HAZARD_ACCEL_NOISE_FLOOR", "1.0"))
+    significant = abs(d2_mu) > noise_floor
+    direction = "down" if d2_mu < 0.0 else ("up" if d2_mu > 0.0 else "flat")
     components["d2_mu"] = round(d2_mu, 5)
     components["significant"] = significant
     components["direction"] = direction
     # Only a significant DOWNWARD curvature (accelerating collapse) raises hazard.
     if not significant or d2_mu >= 0.0:
         return 0.0, components
-    se = accel.get("se")
-    half_width = 0.0
-    try:
-        if se is not None and math.isfinite(float(se)):
-            # _t95(dof) half-width that `significant` already cleared; subtracting it means we
-            # only charge for curvature that exceeds the noise floor -> SNR-aware magnitude.
-            dof = max(1, int(accel.get("n", 3)) - 3)
-            half_width = _t95(dof) * float(se)
-    except Exception:
-        half_width = 0.0
-    excess = max(0.0, abs(d2_mu) - half_width)
+    # Charge only for curvature beyond the noise floor -> SNR-aware magnitude.
+    excess = max(0.0, abs(d2_mu) - noise_floor)
     accel_term = min(HAZARD_ACCEL_CAP, WEIGHT_ACCEL * excess)
     components["accel"] = round(accel_term, 4)
     return accel_term, components
@@ -592,16 +576,16 @@ def _calibrated_base_hazard(snapshot: dict) -> tuple[float, dict]:
     """Empirical-Bayes base hazard from the calibrated per-agent/domain Poisson lambda.
 
     Replaces the flat BASE_HAZARD with h_base = 1 - exp(-lambda_a) when a MEASURED
-    lambda is available for this agent/domain (the materializer's `lambda_fail`, fitted
-    by modelver_poisson_failure). Falls back to the flat BASE_HAZARD when unmeasured
+    lambda is available for this agent/domain (a `lambda_fail` materialized by the
+    slow-loop calibration layer). Falls back to the flat BASE_HAZARD when unmeasured
     (no row / n_windows == 0) so an un-profiled agent sees no behavior change.
 
     Returns (base_hazard, diagnostics). `diagnostics` is always populated for auditing:
     it records BOTH the calibrated and the flat base, the measured lambda, the window
     count, whether the NegBinom (over-dispersed) path was taken, and the live `source`.
 
-    Snapshot keys consumed (all materialized by modelver_materializer into the agent
-    telemetry snapshot; any may be absent on an un-profiled agent):
+    Snapshot keys consumed (all materialized by the slow-loop calibration layer into the
+    agent telemetry snapshot; any may be absent on an un-profiled agent):
         lambda_fail            -- EWMA-tracked calibrated failure rate (failures/window)
         poisson_n_windows      -- number of observed failure windows (0 => unmeasured)
         poisson_over_dispersed -- dispersion GoF rejected Poisson (clustered failures)
@@ -687,8 +671,8 @@ def calculate_hazard(snapshot: dict | None) -> dict:
         "hazard_rate": hazard,
         "soft_recycle_candidate": hazard >= HAZARD_SOFT_RECYCLE_THRESHOLD,
         "shadow_would_guillotine": hazard >= HAZARD_GUILLOTINE_THRESHOLD,
-        # `hazard_components` is, by contract (test_v1v6_invariants + modelver_fracture_score
-        # SIGNAL_OWNERSHIP), a FLAT map of non-negative NUMERIC contributions. The accel term
+        # `hazard_components` is, by contract, a FLAT map of non-negative NUMERIC
+        # contributions. The accel term
         # is a real contribution and belongs here; its non-numeric diagnostics (d2_mu sign,
         # significance, direction) live separately under `accel_diagnostics`. The base is now
         # the calibrated empirical-Bayes h_base (or the flat prior when unmeasured) -- still a
@@ -840,11 +824,12 @@ def sync_hazard_rates_shadow(limit: int = 500) -> dict:
         agent_id = agent.get("agent_id")
         snapshot = dict(default_telemetry_snapshot())
         snapshot.update(agent.get("telemetry_snapshot") or {})
-        # Wire the calibrated per-agent Poisson rate (materialized by modelver_materializer)
-        # into the hazard snapshot so calculate_hazard's base term is the empirical-Bayes
-        # h_base = 1 - e^-lambda instead of the flat BASE_HAZARD. The materializer writes the
-        # headline `lambda_fail` at the agent root and the GoF/over-dispersion flags under
-        # `shadow`; absence of any of these leaves the snapshot unmeasured -> flat fallback.
+        # Wire the calibrated per-agent Poisson rate (materialized by the slow-loop
+        # calibration layer) into the hazard snapshot so calculate_hazard's base term is the
+        # empirical-Bayes h_base = 1 - e^-lambda instead of the flat BASE_HAZARD. The
+        # calibration layer writes the headline `lambda_fail` at the agent root and the
+        # GoF/over-dispersion flags under `shadow`; absence of any of these leaves the
+        # snapshot unmeasured -> flat fallback.
         materialized_lambda = agent.get("lambda_fail")
         materialized_shadow = agent.get("shadow") or {}
         if materialized_lambda is not None and "lambda_fail" not in (agent.get("telemetry_snapshot") or {}):

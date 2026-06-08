@@ -1,4 +1,4 @@
-"""v1-v6 governance MCP server (hosted-capable; open/closed split).
+"""v1-v5 governance MCP server (hosted-capable; open/closed split).
 
 WHAT THIS IS
 ------------
@@ -8,9 +8,8 @@ engine as a small set of governance tools. It wraps -- never re-implements --
     * dispatcher.utility_for      -- the V5 risk-adjusted auction objective
     * ledger.calculate_hazard +   -- the V3 hazard model + the absolute-HP event
       ledger.EVENTS / clamp/rank     ledger and its guillotine line
-    * governance_v6.oracle_tier   -- the V6 oracle ladder (what verification is
-      / cvar                         strong enough to allow a hard action) + the
-                                     coherent CVaR tail price
+    * risk_core.concentration_check -- the coherent vendor-concentration cap (V5)
+                                     + the historical CVaR tail price
     * model_router (tier auction) -- the data-driven opus/sonnet/haiku tier pick,
                                      scored on the dispatcher's own p_success/cost
 
@@ -40,7 +39,7 @@ namespace. At import time we try to load it:
                                       auction utility / hazard / tier scores, and
                                       the fitted marginal-CVaR vendor-correlation).
     * absent  (local open deploy)  -> PREMIUM_AVAILABLE = False; the engine runs on
-                                      its OPEN BASELINE -- the same correct v1-v6
+                                      its OPEN BASELINE -- the same correct v1-v5
                                       math, just without the fitted premium overlay.
 
 Either way the tool logic is identical CODE; the only difference is whether the
@@ -66,9 +65,9 @@ from typing import Any
 # so NONE of the logic functions require a live MongoDB connection.
 # --------------------------------------------------------------------------- #
 from quant.governance import dispatcher as _dispatcher
-from quant.governance import governance_v6 as _gov6
 from quant.governance import ledger as _ledger
 from quant.governance import model_router as _model_router
+from quant.governance import risk_core as _risk_core
 
 # --------------------------------------------------------------------------- #
 # OPEN / CLOSED SPLIT -- optional premium overlay.
@@ -144,7 +143,7 @@ def deployment_mode() -> dict:
         "note": (
             "Hosted: fitted calibration + marginal-CVaR overlay applied server-side."
             if PREMIUM_AVAILABLE
-            else "Local open baseline: correct v1-v6 math without the premium overlay."
+            else "Local open baseline: correct v1-v5 math without the premium overlay."
         ),
     }
 
@@ -286,7 +285,7 @@ def govern_route_logic(task: dict, agents: list[dict],
 def record_outcome_logic(agent_id: str, success: bool, event: str | None = None,
                          agent: dict | None = None, task: dict | None = None,
                          quality: float = 1.0) -> dict:
-    """Apply the REAL v1-v6 HP + Bayesian-skill update for one observed outcome.
+    """Apply the REAL v1-v5 HP + Bayesian-skill update for one observed outcome.
 
     Mirrors `ledger.apply_delta` (absolute-HP event ledger) and
     `ledger.update_domain_skill` (Elo/Bayesian mu/sigma law) EXACTLY -- the same
@@ -373,6 +372,22 @@ def record_outcome_logic(agent_id: str, success: bool, event: str | None = None,
     }
 
 
+def _has_deterministic_oracle(a: dict) -> bool:
+    """Whether a DETERMINISTIC ground-truth oracle (tests / invariant / compiler / an
+    explicit deterministic-oracle flag) backs a verdict for this agent.
+
+    Severity-matched authority (V1-V5 safety invariant): only a deterministic oracle may
+    authorize an irreversible HARD action (guillotine). High hazard or low HP alone, with
+    no deterministic backing, may only RECYCLE/HOLD -- never auto-kill. The signal is read
+    from the agent's optional `oracle`/`task` descriptor; absence means no hard action.
+    """
+    src = a.get("oracle") or a.get("task") or {}
+    if not isinstance(src, dict):
+        return False
+    return bool(src.get("has_deterministic_oracle") or src.get("has_tests")
+                or src.get("has_invariant") or src.get("has_compiler"))
+
+
 def survival_check_logic(agent: dict) -> dict:
     """Read-only survival verdict for one agent: should it be killed, recycled, or kept?
 
@@ -381,13 +396,13 @@ def survival_check_logic(agent: dict) -> dict:
         (`ledger.SOFT_RECYCLE_HP`),
       * the V3 hazard from `ledger.calculate_hazard` against the soft-recycle /
         guillotine hazard thresholds,
-      * the V6 oracle ladder (`governance_v6.oracle_tier`): a HARD action (guillotine)
-        is only ALLOWED when a deterministic oracle backs the verdict -- so a high
-        hazard with no deterministic oracle can only RECYCLE, never auto-kill.
+      * severity-matched authority: a HARD action (guillotine) is only ALLOWED when a
+        deterministic oracle backs the verdict -- so a high hazard or low HP with no
+        deterministic oracle can only RECYCLE/HOLD, never auto-kill.
 
-    Verdicts: GUILLOTINE (HP below line, deterministic oracle present),
+    Verdicts: GUILLOTINE (HP below line / hazard critical, deterministic oracle present),
               SOFT_RECYCLE (in the recycle band or high hazard),
-              HOLD (high hazard but no deterministic oracle -> route to committee),
+              HOLD (HP below line / hazard critical but no deterministic oracle -> committee),
               SURVIVE (healthy).
     """
     a = _normalize_agent(agent or {})
@@ -400,9 +415,8 @@ def survival_check_logic(agent: dict) -> dict:
     )
     hazard_rate = round(max(0.0, min(1.0, hazard_rate)), 4)
 
-    # oracle ladder: is a deterministic (hard-action-permitting) oracle available?
-    oracle = _gov6.oracle_tier(a.get("oracle") or a.get("task") or {})
-    hard_ok = bool(oracle.get("hard_action_allowed"))
+    # severity-matched authority: is a deterministic (hard-action-permitting) oracle present?
+    hard_ok = _has_deterministic_oracle(a)
 
     below_line = hp < _ledger.GUILLOTINE_HP
     in_recycle_band = _ledger.GUILLOTINE_HP <= hp < _ledger.SOFT_RECYCLE_HP
@@ -417,7 +431,7 @@ def survival_check_logic(agent: dict) -> dict:
         # high-severity signal but NO deterministic oracle -> may not auto-kill.
         verdict = "HOLD"
         reason = ("hp<20 / hazard critical but no deterministic oracle -> route to "
-                  "committee (oracle ladder forbids auto-guillotine)")
+                  "committee (severity-matched authority forbids auto-guillotine)")
     elif in_recycle_band or hazard_recycle:
         verdict = "SOFT_RECYCLE"
         reason = ("hp in [20,40) recycle band" if in_recycle_band
@@ -432,7 +446,6 @@ def survival_check_logic(agent: dict) -> dict:
         "hp": round(hp, 4),
         "hazard": hazard_rate,
         "reason": reason,
-        "oracle_tier": oracle.get("tier"),
         "hard_action_allowed": hard_ok,
         "premium_applied": PREMIUM_AVAILABLE,
     }
@@ -546,12 +559,12 @@ def model_route_logic(task: dict, disk_free: float | None = None,
 
 def fleet_snapshot_logic(fleet: list[dict]) -> dict:
     """Summarize a fleet of agents: HP/rank distribution, survival verdicts, and the
-    REAL V6 vendor-concentration check on in-flight critical work.
+    REAL vendor-concentration check on in-flight critical work.
 
     For each agent we run `survival_check_logic` (no mutation) and tally verdicts. The
-    vendor concentration uses `governance_v6.concentration_check` (the same coherent
-    cap the live auction enforces) over the agents' declared vendors/models so an
-    operator can see at a glance whether one vendor is over-represented.
+    vendor concentration uses `risk_core.concentration_check` (the same coherent cap the
+    live auction enforces) over the agents' declared vendors/models so an operator can
+    see at a glance whether one vendor is over-represented.
 
     Returns a summary dict (counts, mean HP/hazard, at-risk list, concentration).
     """
@@ -573,7 +586,7 @@ def fleet_snapshot_logic(fleet: list[dict]) -> dict:
                             "hp": sc["hp"], "hazard": sc["hazard"]})
         vendors.append(_dispatcher._agent_vendor(_normalize_agent(raw)))
 
-    concentration = _gov6.concentration_check(vendors) if vendors else {"error": "no vendors"}
+    concentration = _risk_core.concentration_check(vendors) if vendors else {"error": "no vendors"}
     n = len(fleet)
     return {
         "count": n,
@@ -619,7 +632,7 @@ def build_server():  # pragma: no cover - requires the mcp SDK
     @mcp.tool()
     def record_outcome(agent_id: str, success: bool, event: str | None = None,
                        agent: dict | None = None, task: dict | None = None) -> dict:
-        """Apply the v1-v6 HP + Bayesian-skill + hazard update for one outcome."""
+        """Apply the v1-v5 HP + Bayesian-skill + hazard update for one outcome."""
         return record_outcome_logic(agent_id, success, event=event, agent=agent, task=task)
 
     @mcp.tool()
@@ -629,7 +642,7 @@ def build_server():  # pragma: no cover - requires the mcp SDK
 
     @mcp.tool()
     def model_route(task: dict) -> dict:
-        """Pick the model tier (opus/sonnet/haiku) for `task` via the v1-v6 auction."""
+        """Pick the model tier (opus/sonnet/haiku) for `task` via the v1-v5 auction."""
         return model_route_logic(task)
 
     @mcp.tool()

@@ -27,14 +27,14 @@ For a small fleet doing low-stakes tasks, this is tolerable. For a fleet
 handling tasks with financial, legal, or security exposure — or for any team
 that has to explain decisions after the fact — it is not.
 
-## The v1-v6 governance model
+## The v1-v5 governance model
 
 `quantchoai-governor` is our answer to this. It is a governance engine, not an
 orchestrator. It does not run agents. It does not call APIs. It answers one
 question, deterministically, for every task: **which agent is the
 utility-maximising choice, given current fleet state and task risk profile?**
 
-The engine is structured as six layers, each solving a distinct failure mode:
+The engine is structured as five layers, each solving a distinct failure mode:
 
 **V1 — HP ledger.** Every agent carries an absolute health-point balance. Each
 outcome (success, partial, fail, critical fail) applies a deterministic delta.
@@ -51,13 +51,17 @@ equivalent to a proven one.
 **V3 — Poisson-hazard survival rate.** HP and Bayesian credit are
 backward-looking. V3 adds a forward-looking hazard rate: a Poisson-process
 estimate of mean-time-to-next-failure, fitted on the agent's recent outcome
-history. High hazard alone does not kill an agent — see V6 — but it does reduce
-its probability of winning auctions and raises the survival-check flag.
+history. High hazard alone does not kill an agent — see the severity-matched
+authority invariant below — but it does reduce its probability of winning
+auctions and raises the survival-check flag.
 
-**V4 — Model-tier hard gate.** For tasks with a money-risk or security-risk
-flag above a defined threshold, the model tier is locked to the highest
-capability tier regardless of auction outcome. This is not a soft preference; it
-is an invariant the engine enforces before the auction runs.
+**V4 — Warm-propulsion.** Symmetric scoring ignores momentum. V4 rewards agents
+whose skill trajectory is accelerating upward (the positive mirror of V3's
+collapse-acceleration signal), so capital concentrates on *rising* agents earlier
+than a level-only policy would. The money/security **hard gate** — for tasks with
+a money-risk or security-risk flag above a defined threshold, eligibility is locked
+to a proven, low-uncertainty agent (and the highest model tier) regardless of
+auction outcome — is an invariant enforced before the auction runs.
 
 **V5 — Risk-adjusted utility auction.** The routing decision is the argmax of:
 
@@ -76,17 +80,18 @@ security, and live-execution risk legs jointly. This is not a hand-tuned penalty
 coefficient; it is a mathematically principled risk measure with a derivation
 you can verify. The full derivation is in the whitepaper.
 
-**V6 — Oracle-ladder anti-guillotine gate.** The guillotine verdict — a hard
-retirement — is only issued when a deterministic oracle signal (consecutive
-hard failures, HP below the floor, or a manual override flag) backs the
-decision. High hazard alone triggers HOLD, which routes the retirement decision
-to a human committee. This prevents the system from auto-killing an agent on
-statistical noise.
+**Severity-matched authority (the safety invariant).** The guillotine verdict — a
+hard retirement — is only issued when a deterministic oracle signal (consecutive
+hard failures, HP below the floor, or a manual override flag) backs the decision.
+High hazard alone triggers HOLD, which routes the retirement decision to a human
+committee. This prevents the system from auto-killing an agent on statistical noise,
+and it holds across all five layers regardless of how good a probabilistic signal looks.
 
-Together, these six layers give you: deterministic routing, Bayesian skill
+Together, these five layers give you: deterministic routing, Bayesian skill
 tracking, forward-looking health monitoring, hard risk gates, coherent tail-risk
 pricing, and a human-in-the-loop on irreversible decisions. No LLM in the
-routing path. No fitted constants in the open baseline.
+routing path. No fitted constants in the open baseline — fitted calibration and
+advanced risk tiers are a separate private/commercial layer.
 
 ## Five MCP tools, one install line
 
@@ -94,8 +99,8 @@ The entire control plane is exposed as five MCP tools:
 
 - `govern_route` — run the V5 auction
 - `record_outcome` — apply an observation to agent state
-- `survival_check` — get a V6 verdict for one agent
-- `model_route` — tier selection with V4 hard gate
+- `survival_check` — get a survival verdict for one agent
+- `model_route` — tier selection with the money/security hard gate
 - `fleet_snapshot` — full fleet health summary
 
 All five tools are **stateless at call time**: prior state arrives as plain JSON
@@ -129,9 +134,9 @@ calls from the tool logic, no database.
 
 ## Open-core model
 
-The open baseline — this repository — ships the complete v1-v6 mathematics
+The open baseline — this repository — ships the complete v1-v5 mathematics
 under MIT. Nothing is stripped or stubbed. You can read the CVaR derivation,
-the oracle-ladder protocol, and the V3 hazard estimator in the source.
+the severity-matched authority rule, and the V3 hazard estimator in the source.
 
 The hosted tier adds two things the open baseline does not include:
 
@@ -166,7 +171,7 @@ institutional deployments where "the model decided" is not a sufficient answer.
 - **Repo and quickstart:** [https://github.com/quantchoai/quantchoai-governor]
 - **Runnable demo (no Mongo, no network):**
   `cd backend && python -m quant.governance.kit.quickstart`
-- **Whitepaper** (CVaR derivation, oracle-ladder protocol, open/closed split
+- **Whitepaper** (CVaR derivation, severity-matched authority, open/closed split
   architecture): available on request → hello@quantchoai.com
 - **Hosted tier access:** hello@quantchoai.com
 

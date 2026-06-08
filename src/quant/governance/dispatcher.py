@@ -24,18 +24,14 @@ try:
 except Exception:  # pragma: no cover - optional host telemetry
     psutil = None
 
-# CVaR UNIFY (peer point 1): the live tail term must be priced on a coherent
-# Expected-Shortfall estimate, NOT the crude exp(money+sec+live) proxy. Pull the
-# hardened tail-risk layer (deterministic, no LLM/Mongo) into the hot path. We keep
-# governance_v6.cvar as the historical fallback in case the modelver layer is absent.
+# CVaR: the live tail term is priced on a coherent Expected-Shortfall estimate, NOT
+# the crude exp(money+sec+live) proxy. The open package uses the historical
+# order-statistic estimator (risk_core.cvar); the hardened Rockafellar-Uryasev +
+# Cornish-Fisher estimator is part of the private/commercial layer and is not bundled here.
 try:
-    from quant.governance import modelver_cvar_budget as _cvar_budget  # type: ignore
-except Exception:  # pragma: no cover - module must always be present in this workspace
-    _cvar_budget = None
-try:
-    from quant.governance import governance_v6 as _gov6  # type: ignore
+    from quant.governance import risk_core as _risk_core  # type: ignore
 except Exception:  # pragma: no cover
-    _gov6 = None
+    _risk_core = None
 
 
 Q = "agent_queue"
@@ -62,10 +58,10 @@ MIN_POSITIVE_UTILITY = float(os.environ.get("QUANTCHO_AUCTION_MIN_UTILITY", "0.0
 LOW_CONFIDENCE_MIN_P = float(os.environ.get("QUANTCHO_AUCTION_MIN_RISK_P", "0.72"))
 CRITICAL_CONFIDENCE_MIN_P = float(os.environ.get("QUANTCHO_AUCTION_CRITICAL_RISK_P", "0.86"))
 
-# CVaR UNIFY (peer point 1) -------------------------------------------------------
+# CVaR ----------------------------------------------------------------------------
 # Confidence level the live tail term is priced at. 0.95 matches the shadow-scorer
-# backtest (governance_v6.cvar / modelver_cvar_budget.DEFAULT_ALPHA) so the LIVE
-# auction and the SHADOW budget speak the same Expected-Shortfall units.
+# backtest (risk_core.cvar) so the LIVE auction and the shadow budget speak the same
+# Expected-Shortfall units.
 CVAR_ALPHA = float(os.environ.get("QUANTCHO_AUCTION_CVAR_ALPHA", "0.95"))
 # Calm base mass: the bulk of a ticket's loss outcomes are small. We seed the loss
 # vector with CVAR_CALM_MASS draws of CVAR_CALM_LOSS so the tail (the exp(risk) legs)
@@ -77,7 +73,7 @@ CVAR_CALM_LOSS = float(os.environ.get("QUANTCHO_AUCTION_CVAR_CALM_LOSS", "1.0"))
 # GOODHART HARD-COST (peer point 2) ----------------------------------------------
 # A NAMED hard cost (charged in utility units AND in ledger credit) so "decline the
 # hard eligible task" and "emit safe low-information garbage" are never dominant
-# strategies. These mirror governance_v6.value_adjustment's intent but make the cost
+# strategies. These mirror risk_core.value_adjustment's intent but make the cost
 # an explicit, testable term on the LIVE auction objective rather than a post-hoc HP
 # event. DECLINE is charged as a fraction of the value forgone; LOW-INFO is charged
 # as a fraction of the value that an empty deliverable falsely claims.
@@ -88,7 +84,7 @@ GOODHART_LOWINFO_THRESHOLD = float(os.environ.get("QUANTCHO_GOODHART_LOWINFO_THR
 
 # MARGINAL-CVaR + VENDOR-CONCENTRATION (roadmap item 9) --------------------------
 # PROBLEM: the live auction prices each ticket's tail risk MARGINALLY/INDEPENDENTLY.
-# Vendor-correlated failure (shared model / shared infra) is modeled in governance_v6
+# Vendor-correlated failure (shared model / shared infra) is modeled in risk_core
 # (factor_decomposition / concentration_check / frn_barrier) but NOT priced live, so the
 # fleet can pile critical work onto one vendor with no live penalty. FIX: add the
 # assignment's MARGINAL contribution to FLEET CVaR given the current in-flight vendor
@@ -110,12 +106,12 @@ GOODHART_LOWINFO_THRESHOLD = float(os.environ.get("QUANTCHO_GOODHART_LOWINFO_THR
 # the independent per-ticket pricing is the fallback and the concentration cap is not
 # enforced live -- byte-identical to the pre-wire behaviour.
 MARGINAL_CVAR_ENABLED = os.environ.get("QUANTCHO_MARGINAL_CVAR_ENABLED", "TRUE").upper() == "TRUE"
-# Pairwise vendor failure correlation (shared model / RLHF / infra). The factor model
-# (modelver_correlation_regime) estimates this from the trouble matrix in the slow loop;
-# here it is the live default the marginal-CVaR allocation prices on. rho in [0,1].
+# Pairwise vendor failure correlation (shared model / RLHF / infra). The open package
+# uses the live default below; a fitted estimate of this correlation is part of the
+# private/commercial layer. rho in [0,1].
 VENDOR_CORR_RHO = float(os.environ.get("QUANTCHO_VENDOR_CORR_RHO", "0.40"))
 # Concentration cap: max fleet share of in-flight (incl. the prospective) critical work on
-# any single vendor. Mirrors governance_v6.concentration_check's 0.40 default. An assignment
+# any single vendor. Mirrors risk_core.concentration_check's 0.40 default. An assignment
 # that would push a vendor's share strictly above this is INELIGIBLE (live hard constraint).
 VENDOR_CONCENTRATION_CAP = float(os.environ.get("QUANTCHO_VENDOR_CONCENTRATION_CAP", "0.40"))
 # Concentration is a FLEET-correlation control on critical work. A bare-keyword doc ticket
@@ -155,9 +151,9 @@ REAL_ADAPTER_RE = re.compile(
 PAPER_RE = re.compile(r"\b(paper|uat|sandbox|simulated|dry-run|dry run|demo)\b", re.I)
 ELITE_ONLY_DOMAINS = {"money_math", "committee_judgment", "core_dev"}
 
-# --- V6 narrowed money-critical classification --------------------------------
-# Validated 2026-06-03: cuts auction over-blocking from ~47% to ~6% while still
-# gating genuine money-math (see bridge/SHADOW_SCORER_FINDINGS_20260603.md).
+# --- Narrowed money-critical classification -----------------------------------
+# Cuts auction over-blocking sharply while still gating genuine money-math: a ticket
+# is money/security-critical ONLY for a real mutation / live / protected-path action.
 # A ticket is money/security-critical ONLY for a real mutation / live / protected-path
 # action -- NOT a bare keyword mention in a doc/summary/triage ticket.
 _MUT_RE = re.compile(r"\b(insert|write|writes|writing|written|merge|merged|reseed|submit|place\s*order|apply|mutate|mutated|settle|settled|deploy|migrat)\w*", re.I)
@@ -445,7 +441,7 @@ def _risk_level(ticket: dict, key: str, text: str, regex: re.Pattern[str]) -> fl
     explicit = _explicit_risk_field(ticket, key)
     if explicit is not None:
         return explicit
-    # V6 narrowed: keyword inference fires only for genuine money-critical tickets,
+    # Narrowed: keyword inference fires only for genuine money-critical tickets,
     # so a doc that merely MENTIONS accounting/tax/etc is not auto-rated high-risk.
     if key in ("money_risk", "security_risk", "live_risk") and not _is_genuine_money_critical(ticket):
         return 0.0
@@ -486,48 +482,29 @@ def _risk_loss_vector(money_risk: float, security_risk: float, live_risk: float)
 def _cvar_tail_term(money_risk: float, security_risk: float, live_risk: float) -> float:
     """CVaR/Expected-Shortfall tail term that REPLACES exp(money+sec+live).
 
-    Prices the (1-CVAR_ALPHA) tail of the per-ticket loss vector using the hardened
-    Cornish-Fisher Expected Shortfall (skew/kurt aware, works on a small sample, O(n)
-    on the tail -- hot-path safe). Falls back to the historical Rockafellar-Uryasev ES
-    and finally to governance_v6.cvar so the LIVE path always prices tail risk on an ES
-    estimate, never on the crude proxy. A no-risk ticket returns the calm base mass
-    (~1.0), preserving the old behaviour that a benign ticket carries ~unit tail weight.
+    Prices the (1-CVAR_ALPHA) tail of the per-ticket loss vector using the historical
+    order-statistic Expected Shortfall (risk_core.cvar) so the LIVE path always prices
+    tail risk on a coherent ES estimate, never on the crude proxy. A no-risk ticket
+    returns the calm base mass (~1.0), preserving the behaviour that a benign ticket
+    carries ~unit tail weight. The hardened Rockafellar-Uryasev + Cornish-Fisher
+    estimator is part of the private/commercial layer and is not bundled in this package.
 
-    EFFICIENCY (2026-06-04): this is a PURE function of the three risk legs, each drawn
-    from a tiny discrete grid (the explicit-field clamp [0,5] plus the keyword-inferred
-    set {0,1,2,2.5,3.5,4,4.5}). The body sorts an ~100-element loss vector and runs
-    several O(n) ES passes per (agent,ticket) -- but the SAME three legs recur across
-    every candidate agent for a ticket and across cycles. We memoize on the exact float
-    triple via functools.lru_cache. The cache is keyed on the RAW floats (no rounding),
-    so a hit returns the byte-identical value recomputation would produce -- the test
-    asserts this against a fresh, cache-cleared recompute. maxsize=4096 comfortably
-    covers the ~343 discrete-grid outcomes plus any explicit-field one-offs; an arbitrary
-    explicit float simply misses and recomputes, exactly as before.
+    EFFICIENCY: this is a PURE function of the three risk legs, each drawn from a tiny
+    discrete grid (the explicit-field clamp [0,5] plus the keyword-inferred set
+    {0,1,2,2.5,3.5,4,4.5}). The body sorts an ~100-element loss vector once per distinct
+    triple -- but the SAME three legs recur across every candidate agent for a ticket and
+    across cycles. We memoize on the exact float triple via functools.lru_cache. The cache
+    is keyed on the RAW floats (no rounding), so a hit returns the byte-identical value a
+    recomputation would produce. maxsize=4096 comfortably covers the ~343 discrete-grid
+    outcomes plus any explicit-field one-offs; an arbitrary explicit float simply misses
+    and recomputes.
     """
     losses = _risk_loss_vector(money_risk, security_risk, live_risk)
-    if _cvar_budget is not None:
+    if _risk_core is not None:
         try:
-            # PRIMARY: historical Rockafellar-Uryasev Expected Shortfall. Coherent,
-            # sub-additive, monotone in the tail mass, and the exact estimator the
-            # shadow-scorer backtest measured (VaR 21.8 vs CVaR 337). This is the number
-            # the live tail term is priced on.
-            hist = _cvar_budget.historical_cvar(losses, CVAR_ALPHA)
-            # UPLIFT (bounded): the parametric Cornish-Fisher ES captures skew/kurt fat
-            # tails the empirical sample may under-resolve. But on a near-degenerate
-            # sample (a few huge legs over a calm body) the Edgeworth expansion can blow
-            # up and even INVERT monotonicity -- exactly the "too clean to be true"
-            # regime the V6 D3 anti-Goodhart discipline rejects. So we only let CF LIFT
-            # the historical number, and cap the lift at the historical CVaR itself
-            # (i.e. <= 2x hist). This keeps the term monotone in tail mass while still
-            # crediting a genuine fat tail.
-            cf = _cvar_budget.cornish_fisher_cvar(losses, CVAR_ALPHA)
-            cf_uplift = min(max(0.0, cf - hist), hist)
-            return max(0.0, hist + cf_uplift)
-        except Exception:  # pragma: no cover - defensive; fall through to gov6
-            pass
-    if _gov6 is not None:
-        try:
-            return max(0.0, float(_gov6.cvar(losses, CVAR_ALPHA).get("CVaR", 0.0)))
+            # Historical order-statistic Expected Shortfall. Coherent, sub-additive,
+            # monotone in the tail mass. This is the number the live tail term is priced on.
+            return max(0.0, float(_risk_core.cvar(losses, CVAR_ALPHA).get("CVaR", 0.0)))
         except Exception:  # pragma: no cover
             pass
     # last-resort: the legacy proxy, so the auction never crashes on a missing module.
@@ -640,7 +617,7 @@ def _inflight_vendor_counts(db, vendor_counts: dict | None = None) -> dict[str, 
 def _prospective_vendor_share(vendor: str, vendor_counts: dict[str, int]) -> float:
     """Fleet share this vendor WOULD hold if the prospective assignment is granted.
 
-    Reuses governance_v6.concentration_check's definition (count / total) so the live cap
+    Reuses risk_core.concentration_check's definition (count / total) so the live cap
     speaks the SAME units as the shadow concentration model -- we do not reinvent it. The
     prospective assignment is added to BOTH the vendor's count and the fleet total.
     """
@@ -651,7 +628,7 @@ def _prospective_vendor_share(vendor: str, vendor_counts: dict[str, int]) -> flo
 
 def _concentration_blocks(vendor: str, vendor_counts: dict[str, int],
                           cap: float = VENDOR_CONCENTRATION_CAP) -> bool:
-    """Live concentration-cap eligibility constraint (reuses governance_v6.concentration_check).
+    """Live concentration-cap eligibility constraint (reuses risk_core.concentration_check).
 
     True iff granting the prospective assignment would push `vendor`'s fleet share strictly
     above `cap`. Enforced only once at least VENDOR_CONCENTRATION_MIN_FLEET positions are in
@@ -659,20 +636,20 @@ def _concentration_blocks(vendor: str, vendor_counts: dict[str, int],
     nothing to concentrate against, so blocking it would deadlock dispatch.
 
     Authoritative check: we build the prospective assignment-vendor list (one entry per
-    in-flight position + the prospective one) and run governance_v6.concentration_check on
-    it, so the LIVE verdict is exactly what the shadow concentration model would report. A
-    local share computation is used as the fallback when governance_v6 is unavailable.
+    in-flight position + the prospective one) and run risk_core.concentration_check on it,
+    so the LIVE verdict is exactly what the concentration model reports. A local share
+    computation is used as the fallback when risk_core is unavailable.
     """
     total_inflight = sum(max(0, int(c)) for c in vendor_counts.values())
     if total_inflight + 1 < VENDOR_CONCENTRATION_MIN_FLEET:
         return False
-    if _gov6 is not None:
+    if _risk_core is not None:
         try:
             assignment_vendors: list[str] = []
             for v, c in vendor_counts.items():
                 assignment_vendors.extend([str(v)] * max(0, int(c)))
             assignment_vendors.append(str(vendor))  # the prospective assignment
-            res = _gov6.concentration_check(assignment_vendors, cap=cap)
+            res = _risk_core.concentration_check(assignment_vendors, cap=cap)
             # concentration_check reports the cap violation for the MAX vendor; the assignment
             # is blocked iff THIS vendor is the violating one (its share strictly exceeds cap).
             frac = res.get("fractions", {}).get(str(vendor), 0.0)
@@ -1113,7 +1090,7 @@ def _domain_locked(agent: dict, domain: str) -> bool:
 
 
 def _ticket_is_money_math(ticket: dict) -> bool:
-    # V6 narrowed: only genuine money-math mutations, not bare keyword mentions.
+    # Narrowed: only genuine money-math mutations, not bare keyword mentions.
     return _is_genuine_money_critical(ticket)
 
 

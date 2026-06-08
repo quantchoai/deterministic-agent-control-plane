@@ -1,16 +1,21 @@
-"""V1-V6 agent-governance control plane (PRIVATE MOAT).
+"""V1-V5 deterministic agent-governance control plane (open baseline).
 
-This package is the ported control plane that already existed and was
-unit-tested under ``_cto2_v1v6_private``; it is moved here verbatim (math
-UNCHANGED) and its top-level imports are rewritten to be package-relative
-so it runs inside the backend as ``quant.governance.*``.
+This package is the open, MIT-licensed implementation of the V1-V5 deterministic
+governance frame: a health/survival ledger (V1), a Bayesian skill-credit model and
+money/security hard gate (V2), a Poisson failure-hazard model (V3), warm-propulsion
+(V4), and a risk-budgeted Expected-Utility auction with coherent CVaR tail pricing
+(V5). No LLM sits in the routing loop, so every decision is deterministic, reproducible,
+and auditable.
 
-PRIVATE / SHADOW ONLY. None of these symbols may be re-exported on any
-public-eligible surface. ``v6_runner`` is the deterministic control loop;
-``live_adapter`` adapts REAL Mongo roster/work into the runner and persists
-SHADOW decision snapshots into ``db.governance_shadow`` (it NEVER kills or
-mutates any live agent/collection).
+``runner`` is the deterministic V1-V5 control loop (offline/shadow: it scores, compares
+against a FIFO baseline, and logs; it never kills a live agent or mutates a database).
+``dispatcher`` is the V5 auction, ``ledger`` the V1 survival + V3 hazard math, and
+``risk_core`` the stdlib-only V1-V5 risk/hazard primitives (CVaR, Poisson failure,
+log-normal latency, factor decomposition, concentration check, ...).
+
+Fitted calibration overlays and advanced risk tiers are a separate private/commercial
+layer and are not bundled in this package.
 """
 from __future__ import annotations
 
-__all__ = ["v6_runner", "live_adapter", "efficiency"]
+__all__ = ["runner", "dispatcher", "ledger", "risk_core", "model_router", "governance_params"]

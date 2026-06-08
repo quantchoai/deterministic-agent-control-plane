@@ -1,6 +1,6 @@
 # quantchoai-governor
 
-Open-core v1-v6 agent-governance thin client for Python.
+Open-core v1-v5 agent-governance thin client for Python.
 
 Exposes the 5-step Governor API over the open baseline locally, or delegates
 to a hosted premium endpoint when you have a subscription.
@@ -69,12 +69,12 @@ print(mr["reason"])  # why this tier won
 | Credit routing (V2 Bayesian mu/sigma) | Grounded priors | Learned from real dispatch outcomes |
 | Hazard model (V3 Poisson) | Flat baseline | Calibrated per-agent lambda + NB2 overdispersion |
 | CVaR tail pricing | Historical estimator | Rockafellar-Uryasev + Cornish-Fisher + CI bound |
-| coherent tail term (Expected Shortfall) concentrations | Not included | Euler/marginal allocation over vendor book |
+| Marginal-CVaR vendor concentrations | Not included | Euler/marginal allocation over vendor book |
 | Fitted constants | NOT in this package | Server-side, operator-calibrated |
 
 The open package ships the **frame + generic math only**.  Fitted calibration,
-coherent tail term (Expected Shortfall), and premium governance models live server-side and are never
-bundled in this package.
+the marginal-CVaR vendor concentrations, and premium governance models live
+server-side and are never bundled in this package.
 
 ## Pointing at a Hosted Endpoint
 

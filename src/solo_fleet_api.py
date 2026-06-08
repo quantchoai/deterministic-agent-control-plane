@@ -1,4 +1,4 @@
-"""solo_fleet_api.py — open-core v1-v6 Governor facade.
+"""solo_fleet_api.py — open-core v1-v5 Governor facade.
 
 PUBLIC API (5 methods):
     route(task, agents)            -> best agent name + score breakdown
@@ -39,7 +39,7 @@ __version__ = "0.1.0"
 
 
 # ---------------------------------------------------------------------------
-# Open baseline constants (V1-V6 grounded priors — NOT fitted calibration)
+# Open baseline constants (V1-V5 grounded priors — NOT fitted calibration)
 # ---------------------------------------------------------------------------
 _DEFAULT_HP: float = 50.0
 _MAX_HP: float = 100.0
@@ -101,7 +101,7 @@ def _p_success(mu: float, sigma: float, difficulty: float) -> float:
 def _cvar_open(losses: list[float], alpha: float = _CVAR_ALPHA) -> float:
     """Open-baseline CVaR (Expected Shortfall) — historical order-statistic estimator.
 
-    This is the governance_v6.cvar() definition shipped in the open package.  The
+    This is the risk_core.cvar() definition shipped in the open package.  The
     premium hosted service substitutes the Rockafellar-Uryasev + Cornish-Fisher
     hardened estimator (with the calibrated calm-mass distribution) server-side.
     """
@@ -219,7 +219,7 @@ def _post_json(url: str, payload: dict, timeout: float = 10.0) -> dict:
 # ---------------------------------------------------------------------------
 
 class Governor:
-    """Open-core v1-v6 Governor facade.
+    """Open-core v1-v5 Governor facade.
 
     Parameters
     ----------
@@ -256,7 +256,7 @@ class Governor:
     # ------------------------------------------------------------------ #
 
     def route(self, task: str, agents: list[str | dict]) -> dict[str, Any]:
-        """Select the best agent for a task via the open v1-v6 Expected-Utility auction.
+        """Select the best agent for a task via the open v1-v5 Expected-Utility auction.
 
         In hosted mode the full premium engine (calibrated priors, marginal-CVaR
         concentrations, fitted mu/sigma from real dispatch history) runs server-side.

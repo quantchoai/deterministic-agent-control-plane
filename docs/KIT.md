@@ -1,6 +1,6 @@
-# V1-V6 Governance Kit — Drop-In Deploy Guide
+# V1-V5 Governance Kit — Drop-In Deploy Guide
 
-This kit packages the QuantChoAI V1-V6 agent-management control plane as a
+This kit packages the QuantChoAI V1-V5 agent-management control plane as a
 self-contained drop-in for any Python project that needs risk-budgeted,
 survival-gated, auction-ranked agent dispatch.
 
@@ -83,26 +83,28 @@ Each agent dict must carry at minimum:
 }
 ```
 
-The `candidate_lanes` list tells the materializer which lanes this agent is
-eligible for at what risk level. A lane with `money_risk >= 3` requires the
-agent to clear the V2 hard gate.
+The `candidate_lanes` list tells the runner which lanes this agent is
+eligible for. A critical (risk >= 3) ticket may only be taken by an agent that
+has declared that lane AND clears the V2 money/security hard gate; an off-lane
+agent — even a strong one — can never absorb critical work for a lane it does
+not cover (fail-closed).
 
 ### Step 5 — Wire In; the Rest Is Unchanged
 
 Once you have the event table, outcome signal, risk legs, and actors, the
-entire V1-V6 math is self-contained. Import the runner and call it:
+entire V1-V5 math is self-contained. Import the runner and call it:
 
 ```python
-from quant.governance.v6_runner import V6Runner, synthetic_events
+from quant.governance.runner import Runner, synthetic_events
 
-runner = V6Runner(agents=my_agents)
+runner = Runner(agents=my_agents)
 report = runner.run_offline(my_event_stream)
 ```
 
 Or use the module-level convenience:
 
 ```python
-from quant.governance.v6_runner import run_offline
+from quant.governance.runner import run_offline
 report = run_offline(event_stream, agents=my_agents)
 ```
 
@@ -114,28 +116,16 @@ No Mongo, no LLM, no network required for the offline/shadow control loop.
 
 | Module | Purpose |
 |--------|---------|
-| `quant.governance.v6_runner` | **Core runner.** `V6Runner`, `run_offline`, `synthetic_fleet`, `synthetic_events` |
+| `quant.governance.runner` | **Core runner.** `Runner`, `run_offline`, `synthetic_fleet`, `synthetic_events` |
 | `quant.governance.dispatcher` | **Auction.** `utility_for` — scores one (ticket, agent) pair; `infer_ticket_features` |
-| `quant.governance.ledger` | **V1 survival constants.** `EVENTS`, `DEFAULT_HP`, `MAX_HP`, `GUILLOTINE_HP` |
-| `quant.governance.governance_v6` | **Shadow analytics.** `cvar`, `concentration_check`, `factor_decomposition`, `value_adjustment`, `oracle_tier`, `frn_barrier` |
-| `quant.governance.governance_params` | **Parameter registry.** `V1_SURVIVAL`, `V2_CREDIT`, `V3_HAZARD`, `V4_PROPULSION`, `V5_OPTIMIZATION`, `V6_REGIME` |
-| `quant.governance.model_router` | **Model-tier routing.** Data-driven V1-V6 governed model selection (opus/sonnet/haiku) |
-| `quant.governance.modelver_cvar_budget` | **Hardened CVaR.** `historical_cvar`, `cornish_fisher_cvar` — the priced tail term |
+| `quant.governance.ledger` | **V1 survival + V3 hazard.** `EVENTS`, `DEFAULT_HP`, `MAX_HP`, `GUILLOTINE_HP`, `calculate_hazard` |
+| `quant.governance.risk_core` | **Risk primitives.** `cvar`, `concentration_check`, `factor_decomposition`, `value_adjustment`, `poisson_failure`, `lognormal_latency`, `fracture_score`, `frn_barrier`, `gamma_acceleration` |
+| `quant.governance.governance_params` | **Parameter registry.** `V1_SURVIVAL`, `V2_CREDIT`, `V3_HAZARD`, `V4_PROPULSION`, `V5_OPTIMIZATION`, `REGIME_DETECTION`, `MONEY_CRITICAL` |
+| `quant.governance.model_router` | **Model-tier routing.** Data-driven V1-V5 governed model selection (opus/sonnet/haiku) |
 
-### Key modelver_* engines (all deterministic, no LLM/Mongo)
-
-| Engine | What it computes |
-|--------|----------------|
-| `modelver_cvar_budget` | Rockafellar-Uryasev + Cornish-Fisher Expected Shortfall |
-| `modelver_correlation_regime` | Systematic-vs-idiosyncratic regime detection |
-| `modelver_frn_barrier` | Floating eligibility barrier (FRN) |
-| `modelver_gamma_latency` | Gamma-distribution latency model |
-| `modelver_hot_path` | O(1) per-ticket agent scorer for the hot path |
-| `modelver_lambda_controller` | Lambda controller state (starvation / queue dynamics) |
-| `modelver_materializer` | Slow-loop snapshot builder (bakes all engines into one snapshot) |
-| `modelver_oracle_ladder` | Oracle-tier grounding / anti-hallucination ladder |
-| `modelver_poisson_failure` | Poisson failure-cluster hazard (V3) |
-| `modelver_ucb_sandbox` | UCB exploration credit for under-measured agents |
+> The hardened CVaR estimator (Rockafellar-Uryasev + Cornish-Fisher), the slow-loop
+> snapshot materializer, and the fitted calibration overlay are part of the
+> private/commercial layer and are not bundled in this open package.
 
 ---
 
@@ -155,10 +145,10 @@ All knobs are env-overridable floats/ints. The key ones:
 | `QUANTCHO_AUCTION_CVAR_ALPHA` | 0.95 | Confidence level for Expected Shortfall |
 | `QUANTCHO_DISK_YELLOW_GB` | 10.0 | Yellow disk alert threshold |
 | `QUANTCHO_DISK_CRITICAL_GB` | 5.0 | Hard dispatch freeze below this free GB |
-| `QUANTCHO_coherent tail term (Expected Shortfall)_ENABLED` | TRUE | coherent tail term (Expected Shortfall) + vendor-concentration enforcement |
+| `QUANTCHO_MARGINAL_CVAR_ENABLED` | TRUE | Marginal-CVaR tail pricing + vendor-concentration enforcement |
 | `QUANTCHO_VENDOR_CONCENTRATION_CAP` | 0.40 | Max fleet share of critical work on one vendor |
 
-See `quant.governance.governance_params` for the full V1-V5 + V6 parameter registries.
+See `quant.governance.governance_params` for the full V1-V5 parameter registries.
 
 ---
 

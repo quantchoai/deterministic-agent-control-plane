@@ -1,7 +1,7 @@
 """quantchoai-governor — 60-second quickstart.
 
 Wires a toy 3-agent fleet through the REAL quant.governance control loop
-(V6Runner / dispatcher.utility_for) and prints what the Governor actually
+(runner.Runner / dispatcher.utility_for) and prints what the Governor actually
 decides: who earns each task, who gets blocked from money work, and who is
 decaying. Every number below comes from the real engine — no stubs, no Mongo,
 no LLM, no network.
@@ -12,9 +12,9 @@ no LLM, no network.
 from __future__ import annotations
 
 # ── Step 1: import the real governance modules ────────────────────────────────
-from quant.governance.v6_runner import V6Runner          # core control loop
+from quant.governance.runner import Runner               # core control loop
 from quant.governance.dispatcher import utility_for      # auction scorer
-from quant.governance import governance_v6 as gv6         # risk analytics
+from quant.governance import risk_core as rc             # risk analytics
 
 # ── Step 2: a tiny fleet, in arbitrary arrival order ──────────────────────────
 # Real fleets aren't pre-sorted by skill. FIFO ("give it to whoever's next")
@@ -77,7 +77,7 @@ EVENT_STREAM = [
 
 
 def run() -> dict:
-    return V6Runner(agents=AGENTS).run_offline(EVENT_STREAM)
+    return Runner(agents=AGENTS).run_offline(EVENT_STREAM)
 
 
 def main() -> None:
@@ -112,9 +112,9 @@ def main() -> None:
 
     print("\n--- Pure-math risk analytics (no Mongo, no network) ---")
     losses = [1.0] * 99 + [7.389, 20.09]
-    cv = gv6.cvar(losses, alpha=0.95)
+    cv = rc.cvar(losses, alpha=0.95)
     print(f"  CVaR(0.95) on the loss tail : VaR={cv['VaR']:.2f}  CVaR={cv['CVaR']:.2f}")
-    conc = gv6.concentration_check(
+    conc = rc.concentration_check(
         ["Risk-Elite", "Risk-Elite", "Analytics-Mid", "Risk-Elite"], cap=0.40)
     print(f"  vendor concentration        : {conc['max_vendor']} holds "
           f"{conc['max_frac']*100:.0f}% of critical work  ->  "

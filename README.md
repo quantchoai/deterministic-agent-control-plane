@@ -21,23 +21,23 @@ python -m quant.governance.kit.quickstart      # no API key, no network, no data
 ```
 
 ```text
-  Auction utility    563.3   vs FIFO    476.3    (+18.3%, deterministic)
   Money tasks refused to unproven agents : 1   (fail-closed)
-  Agents flagged decaying                : Docs-Cheap
+  Agents flagged decaying                : Docs-Cheap, Risk-Elite
 
 --- Per-task routing (auction vs the naive FIFO baseline) ---
-  T001:  auction=Risk-Elite   fifo=Docs-Cheap     <- auction routed better
-  T002:  auction=Risk-Elite   fifo=Risk-Elite
-  T003:  auction=BLOCKED      fifo=BLOCKED         <- fail-closed money gate
-  T004:  auction=Risk-Elite   fifo=Docs-Cheap      <- auction routed better
+  T001:  auction=Risk-Elite     fifo=Analytics-Mid   <- auction routed better
+  T002:  auction=Risk-Elite     fifo=Risk-Elite
+  T003:  auction=BLOCKED        fifo=BLOCKED          <- fail-closed money gate
+  T004:  auction=Risk-Elite     fifo=Analytics-Mid    <- auction routed better
+  T005:  auction=Analytics-Mid  fifo=Analytics-Mid
 
 --- Final fleet state (V1 survival + V2 credit + V3 hazard) ---
-  Docs-Cheap     hp=23.0  mu=44.9  sigma=34.0  hazard=0.242   <- decaying, flagged before it fails
+  Docs-Cheap     hp= 0.0  mu=32.9  sigma=40.1  hazard=0.900  GUILLOTINED
   Analytics-Mid  hp=72.0  mu=65.0  sigma=19.0  hazard=0.000
-  Risk-Elite     hp=93.0  mu=84.0  sigma=10.4  hazard=0.057
+  Risk-Elite     hp=93.0  mu=84.0  sigma=10.4  hazard=0.200  <- decaying, flagged
 ```
 
-Real engine, real numbers, no stubs. The auction routes **+18% more utility** than naive FIFO, **refuses** the money task to the unproven agent, and **flags the decaying agent before it fails** — and the whole run is deterministic: run it twice, get the same answer.
+Real engine, real numbers, no stubs. The auction routes work to the proven agent where naive FIFO does not, **refuses** the money task to the unproven agent (fail-closed), and **flags the decaying agent before it takes an incident** — and the whole run is deterministic: run it twice, get the same answer.
 
 ---
 
@@ -55,9 +55,9 @@ LLM-orchestrated fleets break in five predictable ways. The Governor closes each
 
 ---
 
-## The V1–V6 control plane
+## The V1–V5 control plane
 
-Six layers, each a small, well-understood piece of math:
+Five layers, each a small, well-understood piece of math:
 
 | | Layer | What it governs | The math |
 |---|---|---|---|
@@ -66,9 +66,10 @@ Six layers, each a small, well-understood piece of math:
 | **V3** | **Hazard** | failure risk *before* it completes | Poisson base rate + acceleration |
 | **V4** | **Propulsion** | reward rising agents, not just safe ones | momentum term |
 | **V5** | **Auction** | who earns the task, under a risk budget | `U = p·value − cost − CVaR_tail − …` |
-| **V6** | **Promotion** | shadow → canary → full, with one immutable invariant | calibration gate |
 
-> **The invariant that never bends:** a probabilistic model can *advise* but can **never** earn deterministic-kill authority. High hazard alone never auto-kills — a deterministic oracle must back the verdict, or it routes to a human/committee.
+> **The invariant that never bends:** a probabilistic signal can *advise* but can **never** earn deterministic-kill authority. High hazard alone never auto-kills — a deterministic oracle must back the verdict, or it routes to a human/committee.
+
+> Fitted calibration and advanced risk tiers — the layer that learns from real outcome history and sharpens these decisions — are a separate private/commercial layer, not part of this open package.
 
 ---
 
@@ -127,7 +128,7 @@ The Governor is **not** an orchestrator and doesn't replace one. Frameworks like
 
 ## Open core, honestly
 
-This repository is the **complete, working open baseline** — the real V1–V6 math, MIT-licensed, no crippled stubs. It runs fully on its own.
+This repository is the **complete, working open baseline** — the real V1–V5 math, MIT-licensed, no crippled stubs. It runs fully on its own.
 
 A **hosted deployment** can add a server-side overlay (fitted calibration + a vendor-correlation tail refinement) that sharpens the same decisions on real outcome history. That overlay is **not** in this repo and is **never shipped to a client** — the open server exposes only the integration seam, and `deployment_info` reports `local-open-baseline`. What you read here is exactly what runs; the proprietary fit stays server-side. That is the entire boundary.
 
@@ -138,7 +139,7 @@ A **hosted deployment** can add a server-side overlay (fitted calibration + a ve
 
 ## The math
 
-The objective function, the coherent CVaR derivation (Rockafellar–Uryasev / Cornish–Fisher), the Poisson–Gamma conjugacy, the controller stability proof, and the calibration/promotion protocol are written up in [`docs/WHITEPAPER.md`](docs/WHITEPAPER.md) — constants as **symbols**, not fitted values.
+The objective function, the coherent CVaR derivation (Rockafellar–Uryasev / Cornish–Fisher), the Poisson–Gamma conjugacy, and the controller stability proof are written up in [`docs/WHITEPAPER.md`](docs/WHITEPAPER.md) — constants as **symbols**, not fitted values.
 
 ---
 
@@ -146,7 +147,7 @@ The objective function, the coherent CVaR derivation (Rockafellar–Uryasev / Co
 
 MIT — free to use, modify, redistribute. If it helps your work or research, a citation is appreciated: [`CITATION.cff`](CITATION.cff).
 
-Built by **QuantChoAI**. This is the canonical reference implementation of the V1–V6 deterministic agent-governance framework.
+Built by **QuantChoAI**. This is the canonical reference implementation of the V1–V5 deterministic agent-governance frame.
 
 
 <!-- mcp-name: io.github.quantchoai/quantchoai-governor -->

@@ -1,8 +1,8 @@
-"""v1-v6 governance MCP server package.
+"""v1-v5 governance MCP server package.
 
-Exposes the real `quant.governance` engine (dispatcher auction, HP ledger, the V6
-oracle/tail-risk layer, and the data-driven model-tier router) as Model Context
-Protocol tools so an operator-hosted deployment can drive the SAME governance the
+Exposes the real `quant.governance` engine (dispatcher auction, HP ledger, the
+CVaR / vendor-concentration risk core, and the data-driven model-tier router) as Model
+Context Protocol tools so an operator-hosted deployment can drive the SAME governance the
 live fleet runs on -- without re-implementing any of it.
 
 The tool *logic* lives in plain importable functions in `server.py`

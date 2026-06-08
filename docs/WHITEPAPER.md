@@ -31,15 +31,14 @@ shadow/replay; live activation is a pending operator decision.* The architecture
 
 ### 1.1 The governance questions
 
-A fleet of agents raises **six** recurring questions, which this architecture answers as six
-layers (V1–V6):
+A fleet of agents raises **five** recurring questions, which this architecture answers as five
+layers (V1–V5):
 
 1. **Survival** — which agents are healthy enough to keep? *(V1)*
 2. **Credit** — how good is each agent, and how *sure* are we? *(V2)*
 3. **Hazard** — which agents are about to fail, before they do? *(V3)*
 4. **Propulsion** — which agents are improving and deserve more? *(V4)*
 5. **Allocation** — given cost, value, and *tail risk*, who gets the next job and the capital? *(V5)*
-6. **Promotion** — how do we roll out a new policy without betting the system on it? *(V6)*
 
 ### 1.2 Related work
 
@@ -65,9 +64,7 @@ irreversible action). To our knowledge no published agent-orchestration system u
   never the *judge*.
 - **P3 — Fail-closed on critical actions.** An unproven agent is *never* routed to a
   money/security-critical action; the default is denial.
-- **P4 — Shadow → Canary → Full.** No new policy acts on live agents until it has *earned*
-  promotion on measured calibration evidence.
-- **P5 — Slow/Hot split.** Heavy estimation runs once per tick (slow loop) and bakes a
+- **P4 — Slow/Hot split.** Heavy estimation runs once per tick (slow loop) and bakes a
   snapshot; the hot path reads it in O(1) per decision.
 
 ### 1.4 Notation
@@ -80,7 +77,7 @@ $\sigma^\*$, $c_3>c_2>c_1$, …); their fitted values are implementation-specifi
 
 ---
 
-## 2. The V1–V6 Stack
+## 2. The V1–V5 Stack
 
 ### V1 — Survival (health reservoir / guillotine)
 
@@ -152,18 +149,20 @@ cost**, so cold re-dispatch is dispreferred and warm context preferred.
 **Improves:** allocation that is simultaneously cost-, risk-, and starvation-aware; the single
 knob through which fail-closed safety and token economy are enforced.
 
-### V6 — Calibration & Promotion (shadow → canary → full)
+### The severity-matched authority invariant
 
-No new policy acts on live agents until it earns it. Promotion is a gate on measured
-calibration, with an **immutable safety invariant: a probabilistic model can never earn
-deterministic-kill authority** (severity-matched authority). Entry to canary requires a minimum
-sample, sufficient agreement, a calibration error below a threshold (predicted vs realized
-failure frequency), and stability; a canary stage carries a **pre-registered exit criterion**
-and an explicit rollback trigger; critical-action models remain operator-gated regardless of
-metrics.
+Across the whole stack one safety rule never bends: **a probabilistic signal can never earn
+deterministic-kill authority.** Only a deterministic oracle (tests, an invariant, a compiler,
+or an explicit ground-truth check) may authorize an irreversible action (a guillotine). High
+hazard or low HP alone routes to recycle/hold or to a human/committee — never an auto-kill.
+This severity-matched authority is enforced in the V1 survival and V5 allocation layers, so it
+holds regardless of how good a statistical signal looks.
 
-**Improves:** turns "we changed the policy and hoped" into a pre-registered, evidence-gated,
-reversible rollout — the model-risk discipline regulated deployments require.
+> **Fitted calibration & advanced risk tiers (private/commercial layer).** Learning the
+> constants from real outcome history — and the staged, evidence-gated rollout of a changed
+> policy — are a separate private/commercial layer that sharpens these same decisions on real
+> dispatch data. This open doctrine describes the V1–V5 frame and its general mathematics; the
+> fitted overlay is not part of the open package and is referenced here only by shape.
 
 ---
 
@@ -214,7 +213,7 @@ inside that region guarantees no oscillation, with back-calculation anti-windup.
 | Routing cost vs LLM manager | **10⁴–10⁶× cheaper** (est.) | first-principles; deterministic side is a CPU-cost estimate |
 
 **Honest boundaries.** (i) **The plane is validated in *shadow/replay*; production routing is
-not yet the auction** — live activation is a pending promotion decision. (ii) The synthetic
+not yet the auction** — live activation is a pending operator decision. (ii) The synthetic
 results are reproducible from seeds and carry no proprietary data; lead with them. (iii) The
 real-replay lift uses *current* agent skill against *historical* tasks (a look-ahead confound on
 skill); an at-assignment snapshot closes it (§6). (iv) Tail ratios are sample-dependent: a
@@ -232,7 +231,7 @@ The plane governs **any** fleet whose actors have (i) measurable outcomes, (ii) 
 2. Define the **outcome signal** (V2 $o$) and the difficulty/value features per task.
 3. Define the **risk legs** (V5 $\rho_{\text{CVaR}}$) — what "critical" means in your domain.
 4. Pick the **actors** — model tiers, microservices, trading strategies, even human teams.
-5. The survival/credit/hazard/propulsion/auction/promotion math is **unchanged**.
+5. The survival/credit/hazard/propulsion/auction math is **unchanged**.
 
 *Illustrative port:* treating cost-differentiated model tiers as the actors and tier cost as the
 auction's cost term, the same V5 auction + V2 gate routes most low-difficulty work to cheaper
@@ -247,22 +246,23 @@ magnitude depends on the task mix.
 per-task tail term (hot path est. 3–50×); streaming sufficient statistics for the rate/latency
 fits (slow loop est. −40–65%); buffered telemetry writes (est. −60–80% DB round-trips). Wire
 the calibrated failure-rate prior into the live hazard; add measurement (oracle regret vs an
-optimal-in-hindsight assignment; pre-registered canary exit criteria; calibration-drift alerts;
-per-dispatch decision provenance; false-removal / false-block rates). Principled upgrades
-(shadow-first): **Thompson Sampling** over UCB1 [Chapelle & Li 2011] (lower finite-horizon
-regret); a true Bayesian credit filter [Glickman 2012; Herbrich et al. 2007]; a **Whittle index**
-[Whittle 1988] unifying the survival/recycle/propulsion thresholds into one near-optimal index.
-*(Certain second-order / correlated-tail extensions are retained in the private implementation.)*
+optimal-in-hindsight assignment; calibration-drift alerts; per-dispatch decision provenance;
+false-removal / false-block rates). Principled upgrades (shadow-first): **Thompson Sampling**
+over UCB1 [Chapelle & Li 2011] (lower finite-horizon regret); a true Bayesian credit filter
+[Glickman 2012; Herbrich et al. 2007]; a **Whittle index** [Whittle 1988] unifying the
+survival/recycle/propulsion thresholds into one near-optimal index.
+*(Fitted calibration, the staged evidence-gated rollout, and certain second-order / correlated-tail
+extensions are a separate private/commercial layer, not part of this open package.)*
 
 ---
 
 ## 7. What Is Already Strong (honest credit)
 
-CVaR uses the coherent Rockafellar–Uryasev estimator (not naive ES). The slow-loop accelerator
-uses a significance-gated local-quadratic fit (the hot-path read is a plain second difference).
-The shadow-price controller exposes a Jury/Schur-verified stable-gain region. The promotion gate
-forbids a probabilistic model from earning deterministic-kill authority — strong Goodhart/safety
-hygiene. The exploration sandbox carries the Auer et al. regret bound and KL-UCB.
+CVaR uses the coherent Rockafellar–Uryasev estimator (not naive ES). The hot-path acceleration
+read is a plain second difference (a significance-gated local-quadratic refinement is part of the
+private/commercial layer). The shadow-price controller exposes a Jury/Schur-verified stable-gain
+region. The severity-matched authority invariant forbids a probabilistic signal from earning
+deterministic-kill authority — strong Goodhart/safety hygiene.
 
 ---
 
@@ -272,8 +272,8 @@ hygiene. The exploration sandbox carries the Auer et al. regret bound and KL-UCB
   *act* on live dispatch; the lifts are proven on replay.
 - **Heuristic credit spread.** The $\sigma$ in the critical-action gate is a heuristic spread,
   not yet a calibrated posterior interval (Glicko-2 upgrade, §6).
-- **Uncalibrated constants.** Several weights are explicitly shadow/uncalibrated and must clear
-  the V6 gate before going canary→full.
+- **Uncalibrated constants.** The open baseline ships grounded priors / illustrative defaults,
+  not fitted values; fitting them from real outcome history is the private/commercial layer.
 - **Benchmark confound.** See §4.
 
 ---

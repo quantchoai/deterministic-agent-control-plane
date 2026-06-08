@@ -179,15 +179,14 @@ V5_OPTIMIZATION = {
 
 
 # ---------------------------------------------------------------------------
-# V6 -- Systematic-vs-idiosyncratic REGIME DETECTION (correlation regime) -- SHADOW
+# Systematic-vs-idiosyncratic REGIME DETECTION (correlation regime) -- SHADOW
 # One-factor decomposition of the domain trouble/return matrix. systematic_share =
 # top-eigenvalue share of total variance. When the fleet's trouble stops being
 # spread across domains (idiosyncratic) and starts moving TOGETHER (systematic), a
 # common-factor shock is in play -> raise the eligibility bar / freeze critical work.
 #
-# Empirical anchor (SHADOW_SCORER_FINDINGS_20260603 / v6_backtest):
-#   systematic_share = 0.027 on the real historical trouble set => IDIOSYNCRATIC.
-#   The detector must NOT alarm at that level; it watches for a future spike.
+# Empirical anchor: systematic_share ~ 0.027 on a representative historical trouble set
+#   => IDIOSYNCRATIC. The detector must NOT alarm at that level; it watches for a spike.
 #
 # ALARM_THRESHOLD is the share at which the regime flips to "systematic". 0.50 means
 # the single dominant factor explains a majority of variance (one factor > all the
@@ -195,7 +194,7 @@ V5_OPTIMIZATION = {
 # MIN_FACTORS / MIN_OBS_PER_FACTOR guard against alarming on a degenerate matrix
 # (one domain, or one observation each) where "share" is meaningless / inflated.
 # ---------------------------------------------------------------------------
-V6_REGIME = {
+REGIME_DETECTION = {
     "SYSTEMATIC_ALARM_THRESHOLD": _f("QUANTCHO_REGIME_ALARM", 0.50),   # share >= this -> SYSTEMATIC alarm
     "SYSTEMATIC_WARN_THRESHOLD": _f("QUANTCHO_REGIME_WARN", 0.30),     # share >= this -> amber watch
     "MIN_FACTORS": _i("QUANTCHO_REGIME_MIN_FACTORS", 3),              # need >=3 domains to judge a regime
@@ -213,17 +212,14 @@ V6_REGIME = {
 
 
 # ---------------------------------------------------------------------------
-# V6 -- NARROW money-critical classification regexes (ROUTING GATE) -- WIRED
-# P2-5 drift fix (2026-06-04): these three regex SOURCE strings were live in
-# dispatcher.py (_MUT_RE / _MONEY_NOUN_RE / _PROTECTED_RE) but ABSENT from this
-# registry, so the "single source of truth" had drifted from the code. Mirrored here
-# 1:1 (re.IGNORECASE) so the registry-vs-live drift test (test_audit_fixes.py) can
-# assert dispatcher's compiled .pattern == these strings. A ticket is money/security
-# critical ONLY for an explicit risk field >=3, a mutation verb co-located with a money
-# noun, or a protected path/control -- NOT a bare keyword mention in a doc.
-# Validated 2026-06-03: cuts auction over-blocking ~47% -> ~6%.
+# NARROW money-critical classification regexes (ROUTING GATE) -- WIRED
+# These three regex SOURCE strings mirror the live dispatcher.py regexes
+# (_MUT_RE / _MONEY_NOUN_RE / _PROTECTED_RE) 1:1 (re.IGNORECASE) so the registry is the
+# single source of truth. A ticket is money/security critical ONLY for an explicit risk
+# field >=3, a mutation verb co-located with a money noun, or a protected path/control --
+# NOT a bare keyword mention in a doc. This sharply cuts auction over-blocking.
 # ---------------------------------------------------------------------------
-V6_MONEY_CRITICAL = {
+MONEY_CRITICAL = {
     "MUT_RE": (
         r"\b(insert|write|writes|writing|written|merge|merged|reseed|submit|"
         r"place\s*order|apply|mutate|mutated|settle|settled|deploy|migrat)\w*"
@@ -463,8 +459,8 @@ REGISTRY = {
     "V3_HAZARD": V3_HAZARD,
     "V4_PROPULSION": V4_PROPULSION,
     "V5_OPTIMIZATION": V5_OPTIMIZATION,
-    "V6_REGIME": V6_REGIME,
-    "V6_MONEY_CRITICAL": V6_MONEY_CRITICAL,
+    "REGIME_DETECTION": REGIME_DETECTION,
+    "MONEY_CRITICAL": MONEY_CRITICAL,
     "COMPUTE_HEDGING": COMPUTE_HEDGING,
     "PHYSICAL_GATES": PHYSICAL_GATES,
     "FORMULAS": FORMULAS,
@@ -472,7 +468,7 @@ REGISTRY = {
 
 __all__ = [
     "V1_SURVIVAL", "V2_CREDIT", "V3_HAZARD", "V4_PROPULSION",
-    "V5_OPTIMIZATION", "V6_REGIME", "V6_MONEY_CRITICAL", "COMPUTE_HEDGING",
+    "V5_OPTIMIZATION", "REGIME_DETECTION", "MONEY_CRITICAL", "COMPUTE_HEDGING",
     "PHYSICAL_GATES", "FORMULAS", "REGISTRY",
 ]
 
