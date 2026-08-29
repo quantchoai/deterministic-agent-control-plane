@@ -143,6 +143,38 @@ The objective function, the coherent CVaR derivation (Rockafellar–Uryasev / Co
 
 ---
 
+## Validation
+
+One result here rests on external data rather than on a harness I wrote. It is the one worth checking first.
+
+**Conformal screening cascade — measured on a 19,050-name real-data holdout.**
+
+The decision "is this item clean enough to skip the expensive check?" is usually a tuned number — *clears if score > 0.85* — and a tuned number carries no guarantee. Conformal prediction replaces it with a distribution-free bound: at most α of true hits can ever be wrongly cleared, where **α is chosen by the operator rather than fitted**.
+
+| α (chosen bound) | Realized false-clear rate | Against nominal |
+|---|---|---|
+| 1% | 0.6% | inside |
+| 5% | 6.8% | slightly above |
+| 10% | 12.0% | slightly above |
+
+Read that honestly: **only the 1% level is strictly inside its bound.** The other two sit above nominal on a single run of this size, which is what sampling noise looks like — not a clean pass. A CUSUM on the escalation rate watches for distribution drift and fails closed to the deep check rather than degrading quietly.
+
+---
+
+## Honest status
+
+Stated plainly, because a control plane that oversells itself is the thing it exists to prevent.
+
+- **Shadow, not live.** The plane scores, compares and logs. It does not yet act on live dispatch. Reported lifts are measured on replay.
+- **Benchmark confound.** The real-replay result measures *current* agent skill against *historical* tasks — a look-ahead bias, and it favours the plane.
+- **The conformal guarantee is marginal, not conditional.** It holds on average over the distribution, not within every subgroup. That argues for per-category bounds rather than one pooled bound.
+- **Illustrative constants.** The open baseline ships defaults. Fitted parameters are a private layer, and the numbers you get out of the quickstart are the defaults, not tuned values.
+- **Pre-commercial.** QuantChoAI is a product-development LLC that has not begun commercial operations. Everything here is evaluation evidence, not production outcomes.
+
+If you find a hole in any of the above, that is the most useful thing you could send.
+
+---
+
 ## Cite · License
 
 MIT — free to use, modify, redistribute. If it helps your work or research, a citation is appreciated: [`CITATION.cff`](CITATION.cff).
