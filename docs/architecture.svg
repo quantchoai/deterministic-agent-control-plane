@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 620" width="920" height="620" role="img" aria-label="The V1 to V5 control plane: four signal layers feed a risk-budgeted auction, whose output passes a severity-matched authority gate before any irreversible action.">
+<title>quantchoai-governor — the V1–V5 control plane</title>
+<desc>Typed work enters an auction. Four signal layers (V1 Survival, V2 Credit, V3 Hazard, V4 Propulsion) score each candidate agent. V5 allocates on a risk-adjusted utility objective. Every irreversible action must clear a severity-matched authority gate, which only a deterministic oracle can open.</desc>
+
+<!-- Styling is intentionally INLINE, not a <style> block: GitHub's SVG
+     sanitizer strips <style>, which renders every class-styled shape as a
+     solid black box. Every panel also carries its own light fill so the
+     diagram reads identically on light and dark backgrounds. -->
+
+<defs>
+  <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+  </marker>
+  <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#0f766e"/>
+  </marker>
+  <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#b45309"/>
+  </marker>
+</defs>
+
+<g font-family="Segoe UI, Helvetica, Arial, sans-serif">
+
+  <!-- ============ intake ============ -->
+  <text x="30" y="34" font-size="10" letter-spacing="1.2" fill="#64748b">INTAKE</text>
+  <rect x="30" y="44" width="196" height="54" rx="7" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="46" y="68" font-size="13" fill="#0f172a">typed work request</text>
+  <text x="46" y="86" font-size="11" fill="#475569">value · money_risk · deadline</text>
+
+  <!-- ============ private layer, explicitly outside ============ -->
+  <rect x="660" y="44" width="230" height="86" rx="7" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="676" y="66" font-size="10" letter-spacing="1.1" fill="#7c3aed">NOT IN THIS PACKAGE</text>
+  <text x="676" y="87" font-size="13" fill="#0f172a">Fitted calibration &amp;</text>
+  <text x="676" y="104" font-size="13" fill="#0f172a">advanced risk tiers</text>
+  <text x="676" y="121" font-size="11" fill="#475569">learns constants from real history · sharpens all four</text>
+
+  <!-- ============ signal layers ============ -->
+  <text x="30" y="140" font-size="10" letter-spacing="1.2" fill="#64748b">SIGNAL LAYERS — each a small, closed-form piece of math</text>
+
+  <rect x="30" y="152" width="196" height="88" rx="7" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="46" y="175" font-size="14" font-weight="600" fill="#0f172a">V1 · Survival</text>
+  <text x="46" y="194" font-size="11" fill="#475569">health reservoir + absolute-HP</text>
+  <text x="46" y="209" font-size="11" fill="#475569">guillotine line</text>
+  <text x="46" y="229" font-size="11" font-family="Consolas, monospace" fill="#1e40af">event-summed ledger</text>
+
+  <rect x="242" y="152" width="196" height="88" rx="7" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="258" y="175" font-size="14" font-weight="600" fill="#0f172a">V2 · Credit</text>
+  <text x="258" y="194" font-size="11" fill="#475569">Bayesian skill posterior</text>
+  <text x="258" y="209" font-size="11" fill="#475569">+ the money gate</text>
+  <text x="258" y="229" font-size="11" font-family="Consolas, monospace" fill="#1e40af">μ / σ · fail-closed</text>
+
+  <rect x="454" y="152" width="196" height="88" rx="7" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="470" y="175" font-size="14" font-weight="600" fill="#0f172a">V3 · Hazard</text>
+  <text x="470" y="194" font-size="11" fill="#475569">failure risk before it</text>
+  <text x="470" y="209" font-size="11" fill="#475569">completes</text>
+  <text x="470" y="229" font-size="11" font-family="Consolas, monospace" fill="#1e40af">Poisson rate + accel</text>
+
+  <rect x="666" y="152" width="196" height="88" rx="7" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="682" y="175" font-size="14" font-weight="600" fill="#0f172a">V4 · Propulsion</text>
+  <text x="682" y="194" font-size="11" fill="#475569">reward rising agents,</text>
+  <text x="682" y="209" font-size="11" fill="#475569">not only safe ones</text>
+  <text x="682" y="229" font-size="11" font-family="Consolas, monospace" fill="#1e40af">momentum term</text>
+
+  <path d="M128,98 L128,150" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+
+  <!-- signals converge into the auction -->
+  <path d="M128,240 L128,266 L764,266 L764,240" stroke="#64748b" stroke-width="1.6" fill="none"/>
+  <path d="M340,240 L340,266" stroke="#64748b" stroke-width="1.6" fill="none"/>
+  <path d="M552,240 L552,266" stroke="#64748b" stroke-width="1.6" fill="none"/>
+  <path d="M446,266 L446,286" stroke="#64748b" stroke-width="1.8" fill="none" marker-end="url(#a)"/>
+
+  <!-- ============ V5 auction ============ -->
+  <rect x="180" y="292" width="560" height="90" rx="8" fill="#ecfdf5" stroke="#0d9488" stroke-width="2"/>
+  <text x="200" y="314" font-size="10" letter-spacing="1.2" fill="#0f766e">ALLOCATION</text>
+  <text x="200" y="336" font-size="14" font-weight="600" fill="#0f172a">V5 · Risk-Budgeted Auction</text>
+  <text x="200" y="358" font-size="12" font-family="Consolas, monospace" fill="#0f766e">U = p·value − cost − CVaR_tail − …</text>
+  <text x="200" y="375" font-size="11" fill="#475569">returns the winner and the full score table — deterministic, reproducible</text>
+
+  <path d="M460,382 L460,414" stroke="#0f766e" stroke-width="2" fill="none" marker-end="url(#ag)"/>
+
+  <!-- ============ authority gate ============ -->
+  <rect x="140" y="414" width="640" height="88" rx="8" fill="#fffbeb" stroke="#d97706" stroke-width="2"/>
+  <text x="160" y="436" font-size="10" letter-spacing="1.1" fill="#b45309">THE INVARIANT THAT NEVER BENDS</text>
+  <text x="160" y="458" font-size="14" font-weight="600" fill="#0f172a">Severity-matched authority gate</text>
+  <text x="160" y="477" font-size="11" fill="#475569">A probabilistic signal may ADVISE. It can never earn deterministic-kill authority.</text>
+  <text x="160" y="493" font-size="11" fill="#475569">Only a deterministic oracle — tests, an invariant, a compiler, a ground-truth check — opens it.</text>
+
+  <!-- ============ the two outcomes ============ -->
+  <path d="M300,502 L300,538" stroke="#0f766e" stroke-width="2" fill="none" marker-end="url(#ag)"/>
+  <rect x="140" y="538" width="320" height="56" rx="7" fill="#ecfdf5" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="158" y="561" font-size="13" fill="#0f172a">deterministic oracle backs it</text>
+  <text x="158" y="580" font-size="11" fill="#475569">irreversible action may proceed</text>
+
+  <path d="M620,502 L620,538" stroke="#b45309" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+  <rect x="480" y="538" width="320" height="56" rx="7" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+  <text x="498" y="561" font-size="13" fill="#0f172a">high hazard / low HP alone</text>
+  <text x="498" y="580" font-size="11" fill="#475569">→ recycle · hold · committee. Never an auto-kill.</text>
+
+</g>
+</svg>
